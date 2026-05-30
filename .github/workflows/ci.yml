@@ -1,0 +1,48 @@
+name: build-and-run
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+
+    services:
+      minio:
+        image: minio/minio
+        ports:
+          - 9000:9000
+          - 9001:9001
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin123
+        options: >-
+          --health-cmd="curl -f http://localhost:9000/minio/health/live || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+        command: server /data --console-address ":9001"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t api-to-s3-demo .
+
+      - name: Run container
+        run: |
+          docker run --rm \
+            -e API_URL=https://jsonplaceholder.typicode.com/posts \
+            -e S3_BUCKET=zemoso-s3-poc \
+            -e S3_PREFIX=raw/ \
+            -e AWS_REGION=ap-south-1 \
+            -e S3_ENDPOINT_URL=http://host.docker.internal:9000 \
+            -e AWS_ACCESS_KEY_ID=AKIA4BDPHQ3THGICJXFZ \
+            -e AWS_SECRET_ACCESS_KEY=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 \
+            --add-host=host.docker.internal:host-gateway \
+            api-to-s3-demo

@@ -1,0 +1,29 @@
+services:
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio_data:/data
+
+  app:
+    build: .
+    depends_on:
+      - minio
+    environment:
+      API_URL: https://jsonplaceholder.typicode.com/posts
+      S3_BUCKET: zemoso-s3-poc
+      S3_PREFIX: raw/
+      AWS_REGION: ap-south-1
+      S3_ENDPOINT_URL: http://host.docker.internal:9000
+      AWS_ACCESS_KEY_ID: AKIA4BDPHQ3THGICJXFZ
+      AWS_SECRET_ACCESS_KEY: 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
+
+volumes:
+  minio_data:
+
