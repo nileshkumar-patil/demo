@@ -21,9 +21,8 @@ services:
       S3_PREFIX: raw/
       AWS_REGION: ap-south-1
       S3_ENDPOINT_URL: http://host.docker.internal:9000
-      AWS_ACCESS_KEY_ID: AKIA4BDPHQ3THGICJXFZ
-      AWS_SECRET_ACCESS_KEY: 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
-
+      AWS_ACCESS_KEY_ID: 
+      AWS_SECRET_ACCESS_KEY: 
 volumes:
   minio_data:
 
