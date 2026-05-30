@@ -7,35 +7,35 @@ from datetime import datetime, timezone
 import boto3
 import pandas as pd
 import requests
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, BotoCoreError
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
 
 API_URL = os.getenv("API_URL", "https://jsonplaceholder.typicode.com/posts")
-S3_BUCKET = os.getenv("S3_BUCKET", "landing-zone")
+S3_BUCKET = os.getenv("S3_BUCKET")
 S3_PREFIX = os.getenv("S3_PREFIX", "raw/")
-AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL", "http://minio:9000")
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "minioadmin")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "minioadmin123")
+AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
 
 
 def get_s3_client():
     return boto3.client(
         "s3",
         region_name=AWS_REGION,
-        endpoint_url=S3_ENDPOINT_URL,
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
     )
 
 
 def ensure_bucket_exists(s3):
+    if not S3_BUCKET:
+        raise ValueError("S3_BUCKET environment variable is required")
+
     try:
         s3.head_bucket(Bucket=S3_BUCKET)
         logging.info("Bucket already exists: %s", S3_BUCKET)
     except ClientError:
-        logging.info("Creating bucket: %s", S3_BUCKET)
+        logging.info("Bucket not found, creating: %s", S3_BUCKET)
         if AWS_REGION == "us-east-1":
             s3.create_bucket(Bucket=S3_BUCKET)
         else:
@@ -52,8 +52,14 @@ def wait_for_api(max_retries=10, sleep_seconds=3):
             response.raise_for_status()
             return response
         except Exception as exc:
-            logging.warning("API not ready yet (attempt %s/%s): %s", attempt, max_retries, exc)
+            logging.warning(
+                "API not ready yet (attempt %s/%s): %s",
+                attempt,
+                max_retries,
+                exc
+            )
             time.sleep(sleep_seconds)
+
     raise RuntimeError(f"API failed after {max_retries} attempts: {API_URL}")
 
 
@@ -88,17 +94,22 @@ def upload_csv_to_s3(s3, csv_data: str):
 
 
 def main():
-    logging.info("Starting API to S3 pipeline")
-    s3 = get_s3_client()
-    ensure_bucket_exists(s3)
+    try:
+        logging.info("Starting API to S3 pipeline")
+        s3 = get_s3_client()
+        ensure_bucket_exists(s3)
 
-    csv_data = download_and_convert()
-    s3_key = upload_csv_to_s3(s3, csv_data)
+        csv_data = download_and_convert()
+        s3_key = upload_csv_to_s3(s3, csv_data)
 
-    logging.info("Upload successful")
-    logging.info("Bucket: %s", S3_BUCKET)
-    logging.info("Object key: %s", s3_key)
-    logging.info("S3 path: s3://%s/%s", S3_BUCKET, s3_key)
+        logging.info("Upload successful")
+        logging.info("Bucket: %s", S3_BUCKET)
+        logging.info("Object key: %s", s3_key)
+        logging.info("S3 path: s3://%s/%s", S3_BUCKET, s3_key)
+
+    except (ClientError, BotoCoreError, requests.RequestException, ValueError, RuntimeError) as exc:
+        logging.error("Pipeline failed: %s", exc)
+        raise
 
 
 if __name__ == "__main__":
